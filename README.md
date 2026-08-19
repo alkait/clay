@@ -1,11 +1,9 @@
-# cltmp
+# clay
 
-Disposable [Claude Code](https://claude.com/claude-code) scratch sessions, one command away.
+Disposable [Claude Code](https://claude.com/claude-code) playgrounds.
 
-```
-$ cltmp
-# → creates ~/Downloads/scratch-20260819-1430, cds into it,
-#   and starts Claude Code there
+```sh
+clay
 ```
 
 ## Why
@@ -13,73 +11,68 @@ $ cltmp
 Claude Code loads project context from wherever you launch it: `CLAUDE.md`
 instructions, `.claude/settings.json` hooks and permissions, `.mcp.json`
 servers. Run a quick experiment inside a real repo and you get contamination
-in both directions — generated scratch files land in your project, and your
-project's config shapes the experiment.
+in both directions — generated throwaway files land in your project, and
+your project's config shapes the experiment.
 
-`cltmp` gives every throwaway session its own fresh, empty directory:
+`clay` gives every throwaway session its own fresh, empty playground:
 
-- **Isolation** — no project config leaks in, no scratch files leak out.
+- **Isolation** — no project config leaks in, no throwaway files leak out.
+  Anything a session creates stays neatly contained in its playground
+  directory.
 - **Low friction** — a disposable empty directory is the one place where
   skipping permission prompts is low-stakes, so sessions run uninterrupted.
-- **Resumability** — `cltmp -c` jumps back into your most recent scratch
-  session without you remembering which directory it was in.
+- **Resumability** — `clay -c` drops you back into your last playground,
+  `clay -cl` picks a kept one from a menu, and `clay -r` promotes a
+  playground you want to keep and gives it a name.
 
 ## Install
 
-Clone (or just copy `cltmp.zsh`) and source it from your shell config:
+Clone (or just copy `clay.zsh`) and source it from your shell config:
 
 ```sh
-git clone https://github.com/alkait/cltmp.git ~/.cltmp
-echo 'source ~/.cltmp/cltmp.zsh' >> ~/.zshrc   # or ~/.bashrc
+git clone https://github.com/alkait/clay.git ~/.clay
+echo 'source ~/.clay/clay.zsh' >> ~/.zshrc   # or ~/.bashrc
 ```
 
-Works in zsh and bash. It's a shell function (not a script) because it needs
-to `cd` your current shell into the scratch directory.
+Works in zsh and bash.
 
 ## Usage
 
 ```sh
-cltmp                     # new timestamped scratch session
-cltmp regex-experiments   # named scratch dir instead of a timestamp
-cltmp -c                  # resume the most recent scratch session
-cltmp -m sonnet           # pick a model (case-insensitive)
-cltmp -e high             # set reasoning effort
-cltmp -s                  # keep normal permission prompts
-cltmp --prune             # delete scratch dirs older than 14 days
-cltmp --prune 30          # ...or older than 30 days
+clay                        # new timestamped playground
+clay -c                     # resume the last-used playground
+clay -c web-scraping-test   # resume a playground by name
+clay -cl                    # pick a kept (renamed) playground from a menu
+clay -r web-scraping-test   # keep the current playground under a real name
+clay -l                     # list playgrounds, most recent first
+clay --prune                # delete all unnamed playgrounds
 ```
 
-| Option | Description |
-| --- | --- |
-| `-c`, `--continue` | Resume the most recent scratch session |
-| `-s`, `--safe` | Keep Claude Code's normal permission prompts |
-| `-m`, `--model NAME` | Model to use |
-| `-e`, `--effort LEVEL` | Reasoning effort |
-| `--prune [DAYS]` | Delete `scratch-*` dirs older than DAYS (default 14) |
-| `-h`, `--help` | Show help |
-
-Scratch directories live in `~/Downloads` by default; set `CLTMP_ROOT` to
-change that:
+Playgrounds live in `~/clay` by default (created on first use); set
+`CLAY_ROOT` to change that:
 
 ```sh
-export CLTMP_ROOT="$HOME/scratch"
+export CLAY_ROOT="$HOME/playgrounds"
 ```
+
+## Keeping a playground
+
+Sometimes a throwaway session turns out to be worth keeping. Exit the
+session, then, from inside the playground:
+
+```sh
+clay -r web-scraping-test
+```
+
+`clay -c web-scraping-test` later resumes the exact conversation — not
+just the files — and named playgrounds are never touched by `--prune`.
 
 ## A note on `--dangerously-skip-permissions`
 
-By default, `cltmp` starts Claude Code with permission prompts disabled.
-That's a deliberate tradeoff: scratch directories are empty and disposable,
-so the usual reason for prompts (protecting a real project) doesn't apply,
-and uninterrupted sessions are the whole point of a scratch pad.
-
-Be aware the flag is not scoped to the directory — Claude can still act
-anywhere on your system it decides to. If that tradeoff isn't for you, run
-`cltmp -s` to keep normal prompts, or make safe mode your default with an
-alias:
-
-```sh
-alias cltmp='cltmp -s'
-```
+Total autonomy with no prompts is the whole point of a playground, and an
+empty, disposable directory is the one place that's low-stakes. The flag
+isn't scoped to the directory, though — remove it from `clay.zsh` if that
+tradeoff isn't for you.
 
 ## License
 
