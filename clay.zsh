@@ -130,10 +130,13 @@ EOF
         return 1 ;;
     esac
     local cur="$PWD"
-    # Compare physical paths so a symlinked or trailing-slash CLAY_ROOT
-    # still matches the directory we're actually in.
-    if [[ "${cur##*/}" != play-* ]] ||
-       [[ "$(cd "${cur%/*}" 2>/dev/null && pwd -P)" != "$(cd "$root" 2>/dev/null && pwd -P)" ]]; then
+    # A playground is a dir directly under $root that is either an unnamed
+    # play-* dir or a kept one (carries the .clay marker) — so kept
+    # playgrounds can be renamed again. Compare physical paths so a
+    # symlinked or trailing-slash CLAY_ROOT still matches the directory
+    # we're actually in.
+    if [[ "$(cd "${cur%/*}" 2>/dev/null && pwd -P)" != "$(cd "$root" 2>/dev/null && pwd -P)" ]] ||
+       [[ "${cur##*/}" != play-* && ! -e "$cur/.clay" ]]; then
       echo "clay: run this from the top level of a playground" >&2
       return 1
     fi
