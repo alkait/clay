@@ -1,7 +1,7 @@
 # clay — disposable Claude Code playgrounds
 #
 # Works in zsh and bash. Source this file from your shell config:
-#   source /path/to/clay.zsh
+#   source /path/to/clay.sh
 #
 # External commands are invoked via 'command' throughout: interactive shells
 # expand aliases inside function bodies when this file is sourced, so a user
@@ -62,7 +62,7 @@ clay() {
   local root="${CLAY_ROOT:-$HOME/clay}"
   root="${root%/}"
 
-  local cont="" pick="" rename="" list="" prune="" del=""
+  local cont="" pick="" rename="" list="" prune="" del="" move=""
   while [[ "$1" == -* ]]; do
     case "$1" in
       -c|--continue) cont=1; shift ;;
@@ -71,6 +71,9 @@ clay() {
       -r|--rename)
         [[ -z "$2" || "$2" == -* ]] && { echo "clay: $1 requires a value" >&2; return 1; }
         rename="$2"; shift 2 ;;
+      -m|--move)
+        [[ -z "$2" || "$2" == -* ]] && { echo "clay: $1 requires a value" >&2; return 1; }
+        move="$2"; shift 2 ;;
       -d|--delete)
         [[ -z "$2" || "$2" == -* ]] && { echo "clay: $1 requires a value" >&2; return 1; }
         del="$2"; shift 2 ;;
@@ -88,6 +91,9 @@ options:
                          and migrate its Claude Code conversation history
   -d, --delete NAME      delete playground NAME and its conversation
                          history (asks for confirmation first)
+  -m, --move DEST        move the current playground to DEST (anywhere,
+                         not just CLAY_ROOT) and migrate its conversation
+                         history; resume there with 'claude --continue'
   -l, --list             list playgrounds, most recent first
       --prune            delete all unnamed playgrounds; renamed (kept)
                          ones are never touched
@@ -207,6 +213,69 @@ EOF
       fi
     else
       echo "clay: renamed to $dest (no conversation history found to migrate)"
+    fi
+    return 0
+  fi
+
+  if [[ -n "$move" ]]; then
+    [[ -n "$1" ]] && { echo "clay: unexpected argument $1" >&2; return 1; }
+    local cur="$PWD"
+    # Same playground check as -r: a play-* dir or a kept one, directly
+    # under $root.
+    if [[ "$(cd "${cur%/*}" 2>/dev/null && pwd -P)" != "$(cd "$root" 2>/dev/null && pwd -P)" ]] ||
+       [[ "${cur##*/}" != play-* && ! -e "$cur/.clay" ]]; then
+      echo "clay: run this from the top level of a playground" >&2
+      return 1
+    fi
+    local dest="$move"
+    [[ "$dest" != /* ]] && dest="$cur/$dest"
+    # mv semantics: an existing directory means "move into it, keeping the
+    # current name".
+    [[ -d "$dest" ]] && dest="$dest/${cur##*/}"
+    case "$dest/" in "$cur"/*)
+      echo "clay: destination is inside the playground itself" >&2; return 1 ;;
+    esac
+    local destbase="${dest##*/}" destdir="${dest%/*}"
+    [[ -z "$destdir" ]] && destdir=/
+    case "$destbase" in
+      play-*) echo "clay: pick a name not starting with 'play-' (those get pruned)" >&2; return 1 ;;
+      # Same round-trip-safe charset as -r, since the name feeds the
+      # history-key encoding.
+      [!A-Za-z0-9]*|*[!A-Za-z0-9._-]*)
+        echo "clay: name must start with a letter or digit and use only letters, digits, '.', '_', '-'" >&2
+        return 1 ;;
+    esac
+    command mkdir -p "$destdir" || return 1
+    # Canonicalize the parent (logical, matching what $PWD will be after
+    # the cd below — that's the path Claude Code keys history by).
+    destdir=$(cd "$destdir" 2>/dev/null && pwd) || { echo "clay: cannot resolve $destdir" >&2; return 1; }
+    dest="${destdir%/}/$destbase"
+    [[ -e "$dest" ]] && { echo "clay: $dest already exists" >&2; return 1; }
+    local hist="$HOME/.claude/projects"
+    local oldenc newenc
+    oldenc=$(_clay_encode "$cur")
+    newenc=$(_clay_encode "$dest")
+    if [[ -e "$hist/$newenc" ]]; then
+      echo "clay: history for $dest already exists in $hist; pick another destination" >&2
+      return 1
+    fi
+    command mv "$cur" "$dest" || return 1
+    cd "$dest" || return 1
+    # Keep the marker only while it lives under $root; a playground that
+    # graduated elsewhere no longer needs clay's tracking.
+    if [[ "$(cd "$destdir" 2>/dev/null && pwd -P)" == "$(cd "$root" 2>/dev/null && pwd -P)" ]]; then
+      command touch "$dest/.clay"
+    else
+      command rm -f "$dest/.clay"
+    fi
+    if [[ -d "$hist/$oldenc" ]]; then
+      if command mv "$hist/$oldenc" "$hist/$newenc"; then
+        echo "clay: moved to $dest (conversation history migrated; resume with 'claude --continue')"
+      else
+        echo "clay: moved to $dest, but history migration FAILED — 'claude --continue' may start fresh" >&2
+      fi
+    else
+      echo "clay: moved to $dest (no conversation history found to migrate)"
     fi
     return 0
   fi
