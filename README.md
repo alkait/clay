@@ -45,6 +45,7 @@ clay -c web-scraping-test   # resume a playground by name
 clay -cl                    # pick a kept (renamed) playground from a menu
 clay -r web-scraping-test   # keep the current playground under a real name
 clay -l                     # list playgrounds, most recent first
+clay -d web-scraping-test   # delete a playground and its history (asks first)
 clay --prune                # delete all unnamed playgrounds
 ```
 
@@ -66,6 +67,8 @@ clay -r web-scraping-test
 
 `clay -c web-scraping-test` later resumes the exact conversation — not
 just the files — and named playgrounds are never touched by `--prune`.
+When you're done with one for good, `clay -d web-scraping-test` deletes
+it along with its conversation history (after asking).
 
 ## A note on `--dangerously-skip-permissions`
 

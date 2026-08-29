@@ -62,7 +62,7 @@ clay() {
   local root="${CLAY_ROOT:-$HOME/clay}"
   root="${root%/}"
 
-  local cont="" pick="" rename="" list="" prune=""
+  local cont="" pick="" rename="" list="" prune="" del=""
   while [[ "$1" == -* ]]; do
     case "$1" in
       -c|--continue) cont=1; shift ;;
@@ -71,6 +71,9 @@ clay() {
       -r|--rename)
         [[ -z "$2" || "$2" == -* ]] && { echo "clay: $1 requires a value" >&2; return 1; }
         rename="$2"; shift 2 ;;
+      -d|--delete)
+        [[ -z "$2" || "$2" == -* ]] && { echo "clay: $1 requires a value" >&2; return 1; }
+        del="$2"; shift 2 ;;
       --prune)       prune=1; shift ;;
       -h|--help)
         command cat <<'EOF'
@@ -83,6 +86,8 @@ options:
   -cl, --pick            pick a kept playground to resume from a menu
   -r, --rename NAME      keep the current playground: rename it to NAME
                          and migrate its Claude Code conversation history
+  -d, --delete NAME      delete playground NAME and its conversation
+                         history (asks for confirmation first)
   -l, --list             list playgrounds, most recent first
       --prune            delete all unnamed playgrounds; renamed (kept)
                          ones are never touched
@@ -95,6 +100,42 @@ EOF
       *) echo "clay: unknown option $1" >&2; return 1 ;;
     esac
   done
+
+  if [[ -n "$del" ]]; then
+    [[ -n "$1" ]] && { echo "clay: unexpected argument $1" >&2; return 1; }
+    local target="$root/$del"
+    if [[ ! -d "$target" ]]; then
+      echo "clay: no playground named '$del' in $root" >&2
+      return 1
+    fi
+    # Only delete playgrounds: unnamed play-* dirs or kept ones carrying the
+    # .clay marker. Anything else under $root is not ours to remove.
+    case "$del" in
+      play-*) ;;
+      *) [[ -e "$target/.clay" ]] || { echo "clay: $target is not a clay playground" >&2; return 1; } ;;
+    esac
+    local hist="$HOME/.claude/projects/$(_clay_encode "$target")"
+    if [[ -d "$hist" ]]; then
+      printf 'clay: delete %s and its conversation history? [y/N] ' "$target"
+    else
+      printf 'clay: delete %s? [y/N] ' "$target"
+    fi
+    local reply=""
+    read -r reply
+    case "$reply" in
+      y|Y|yes|YES) ;;
+      *) echo "clay: aborted"; return 1 ;;
+    esac
+    # Don't leave the shell sitting in a deleted directory. Compare physical
+    # paths so a symlinked CLAY_ROOT still matches.
+    local tgtp
+    tgtp=$(cd "$target" 2>/dev/null && pwd -P)
+    case "$(pwd -P)/" in "$tgtp"/*) cd "$root" || return 1 ;; esac
+    command rm -rf "$target" || return 1
+    [[ -d "$hist" ]] && command rm -rf "$hist"
+    echo "clay: deleted $target"
+    return 0
+  fi
 
   if [[ -n "$prune" ]]; then
     [[ -n "$1" ]] && { echo "clay: --prune takes no arguments" >&2; return 1; }
