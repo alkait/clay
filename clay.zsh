@@ -2,11 +2,16 @@
 #
 # Works in zsh and bash. Source this file from your shell config:
 #   source /path/to/clay.zsh
+#
+# External commands are invoked via 'command' throughout: interactive shells
+# expand aliases inside function bodies when this file is sourced, so a user
+# alias like ls=eza or rm='rm -i' would otherwise get baked in and break the
+# script. 'claude' is deliberately left bare so an alias for it still works.
 
 _clay_encode() {
   # Claude Code keys conversation history by absolute path with every
   # non-alphanumeric character replaced by '-' (~/.claude/projects/<encoded>).
-  printf '%s' "$1" | sed 's/[^A-Za-z0-9]/-/g'
+  printf '%s' "$1" | command sed 's/[^A-Za-z0-9]/-/g'
 }
 
 _clay_dirs() {
@@ -20,13 +25,13 @@ _clay_dirs() {
       play-*) found+=("$d") ;;
       *) [[ -e "$d/.clay" ]] && found+=("$d") ;;
     esac
-  done < <(find "$root" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)
+  done < <(command find "$root" -maxdepth 1 -mindepth 1 -type d 2>/dev/null)
   [[ ${#found[@]} -eq 0 ]] && return 1
   local keys=()
   for d in "${found[@]}"; do
     if [[ -e "$d/.clay" ]]; then keys+=("$d/.clay"); else keys+=("$d"); fi
   done
-  ls -dt "${keys[@]}" | sed 's|/\.clay$||'
+  command ls -dt "${keys[@]}" | command sed 's|/\.clay$||'
 }
 
 _clay_pick() {
@@ -68,7 +73,7 @@ clay() {
         rename="$2"; shift 2 ;;
       --prune)       prune=1; shift ;;
       -h|--help)
-        cat <<'EOF'
+        command cat <<'EOF'
 usage: clay [options]
 
 Start a Claude Code session in a fresh, disposable playground directory.
@@ -101,8 +106,8 @@ EOF
       case "${d##*/}" in play-*) ;; *) continue ;; esac
       pruned=1
       printf 'clay: removing %s\n' "$d"
-      rm -rf "$d"
-    done < <(find "$root" -mindepth 2 -maxdepth 2 -name '.clay' 2>/dev/null)
+      command rm -rf "$d"
+    done < <(command find "$root" -mindepth 2 -maxdepth 2 -name '.clay' 2>/dev/null)
     [[ -z "$pruned" ]] && echo "clay: nothing to prune"
     return 0
   fi
@@ -150,11 +155,11 @@ EOF
       echo "clay: history for $dest already exists in $hist; pick another name" >&2
       return 1
     fi
-    mv "$cur" "$dest" || return 1
+    command mv "$cur" "$dest" || return 1
     cd "$dest" || return 1
-    touch "$dest/.clay"
+    command touch "$dest/.clay"
     if [[ -d "$hist/$oldenc" ]]; then
-      if mv "$hist/$oldenc" "$hist/$newenc"; then
+      if command mv "$hist/$oldenc" "$hist/$newenc"; then
         echo "clay: renamed to $dest (conversation history migrated)"
       else
         echo "clay: renamed to $dest, but history migration FAILED — 'claude --continue' may start fresh" >&2
@@ -176,14 +181,14 @@ EOF
     elif [[ -n "$pick" ]]; then
       target=$(_clay_pick "$root") || return 1
     else
-      target=$(_clay_dirs "$root" | head -n1)
+      target=$(_clay_dirs "$root" | command head -n1)
       if [[ -z "$target" ]]; then
         echo "clay: no playgrounds found in $root" >&2
         return 1
       fi
     fi
     cd "$target" || return
-    touch "$target/.clay" 2>/dev/null  # record last use; adopts pre-marker dirs
+    command touch "$target/.clay" 2>/dev/null  # record last use; adopts pre-marker dirs
     claude --dangerously-skip-permissions --continue
     return
   fi
@@ -193,14 +198,14 @@ EOF
     return 1
   fi
 
-  local base="$root/play-$(date +%Y%m%d-%H%M%S)" dir n=0
-  mkdir -p "$root" || return 1
+  local base="$root/play-$(command date +%Y%m%d-%H%M%S)" dir n=0
+  command mkdir -p "$root" || return 1
   dir="$base"
   # Plain mkdir so a same-second invocation gets a numbered suffix instead
   # of silently sharing the directory (as mkdir -p would).
-  until mkdir "$dir" 2>/dev/null; do
+  until command mkdir "$dir" 2>/dev/null; do
     [[ -e "$dir" ]] || { echo "clay: cannot create $dir" >&2; return 1; }
     n=$((n+1)); dir="$base-$n"
   done
-  touch "$dir/.clay" && cd "$dir" && claude --dangerously-skip-permissions
+  command touch "$dir/.clay" && cd "$dir" && claude --dangerously-skip-permissions
 }
